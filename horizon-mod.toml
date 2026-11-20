@@ -1,7 +1,7 @@
 id = "fluxxy_pvp"
 name = "Fluxxy's PvP Pack"
 version = "1.0.0"
-description = "Low fire, your saturation and exhaustion on the hunger bar, and your pitch while gliding: three PvP helpers in one mod."
+description = "PvP helpers in one mod: low fire, food info, armour HUD, item counters, damage indicator and elytra pitch."
 authors = ["fluxxy33"]
 license = "MIT"
 homepage = "https://github.com/fluxxy33/fluxxy-pvp-pack"
@@ -10,5 +10,5 @@ side = "client"
 capabilities = ["registries"]
 
 [wasm]
-sha512 = "8d6786d9f2283989afa333862a317c955606d430367efe02f9b14a8c8cd85d4fb1cb7d01bafbd96309cebf43f797855c4ab7ef38ff2eed338ef4f66b4c3609d6"
+sha512 = "c012f41aee74ee92e6299e3c4648eb54304a8d4eda49ac16d5fdddedbda6680329f203f9eb6f0d17f9b6f4a2fd313ce41ec96331dc07bf74382fd8360dea3169"
 toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"

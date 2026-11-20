@@ -9,5 +9,11 @@
   "fluxxy_pvp.setting.food_info": "Food info",
   "fluxxy_pvp.setting.food_info.tooltip": "Show your saturation over the hunger bar, and how close the next hunger point is to going as a thin bar above it.",
   "fluxxy_pvp.setting.elytra_pitch": "Elytra pitch",
-  "fluxxy_pvp.setting.elytra_pitch.tooltip": "While gliding, show the angle you look at under the crosshair: up is +, down is -."
+  "fluxxy_pvp.setting.elytra_pitch.tooltip": "While gliding, show the angle you look at under the crosshair, as the debug screen gives it: positive looking down.",
+  "fluxxy_pvp.setting.armor_hud": "Armor HUD",
+  "fluxxy_pvp.setting.armor_hud.tooltip": "Show your armour, with its durability, in slots left of the hotbar. They are only drawn: nothing can be clicked there.",
+  "fluxxy_pvp.setting.item_counters": "Item counters",
+  "fluxxy_pvp.setting.item_counters.tooltip": "Show how many golden apples, ender pearls, totems, arrows, potions and cobwebs you carry, bottom right.",
+  "fluxxy_pvp.setting.damage_indicator": "Damage indicator",
+  "fluxxy_pvp.setting.damage_indicator.tooltip": "Show how many hearts a hit took, above your hearts, for a moment."
 }

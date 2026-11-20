@@ -9,5 +9,11 @@
   "fluxxy_pvp.setting.food_info": "Infos de faim",
   "fluxxy_pvp.setting.food_info.tooltip": "Affiche ta saturation sur la barre de faim, et une fine barre au-dessus qui montre quand le prochain point de faim va partir.",
   "fluxxy_pvp.setting.elytra_pitch": "Angle en elytra",
-  "fluxxy_pvp.setting.elytra_pitch.tooltip": "En vol, affiche sous le viseur l'angle où tu regardes : + vers le haut, - vers le bas."
+  "fluxxy_pvp.setting.elytra_pitch.tooltip": "En vol, affiche sous le viseur l'angle où tu regardes, comme l'écran de débogage : positif vers le bas.",
+  "fluxxy_pvp.setting.armor_hud": "Armure à l'écran",
+  "fluxxy_pvp.setting.armor_hud.tooltip": "Affiche ton armure et son usure dans des cases à gauche de la barre d'objets. Elles sont juste affichées : on ne peut pas cliquer dessus.",
+  "fluxxy_pvp.setting.item_counters": "Compteurs d'objets",
+  "fluxxy_pvp.setting.item_counters.tooltip": "Affiche en bas à droite combien tu as de pommes d'or, perles de l'Ender, totems, flèches, potions et toiles d'araignée.",
+  "fluxxy_pvp.setting.damage_indicator": "Indicateur de dégâts",
+  "fluxxy_pvp.setting.damage_indicator.tooltip": "Affiche un instant, au-dessus de tes cœurs, combien de cœurs un coup t'a fait perdre."
 }
