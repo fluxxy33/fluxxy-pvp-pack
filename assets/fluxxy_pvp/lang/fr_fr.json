@@ -1,0 +1,13 @@
+{
+  "fluxxy_pvp.setting.low_fire": "Feu bas",
+  "fluxxy_pvp.setting.low_fire.tooltip": "Affiche le feu plus bas sur l'écran quand tu brûles, pour qu'il cache moins la vue.",
+  "fluxxy_pvp.setting.fire_height": "Hauteur du feu",
+  "fluxxy_pvp.setting.fire_height.tooltip": "Jusqu'où le feu descend quand Feu bas est activé.",
+  "fluxxy_pvp.fire_height.low": "Bas",
+  "fluxxy_pvp.fire_height.lower": "Plus bas",
+  "fluxxy_pvp.fire_height.lowest": "Tout en bas",
+  "fluxxy_pvp.setting.food_info": "Infos de faim",
+  "fluxxy_pvp.setting.food_info.tooltip": "Affiche ta saturation sur la barre de faim, et une fine barre au-dessus qui montre quand le prochain point de faim va partir.",
+  "fluxxy_pvp.setting.elytra_pitch": "Angle en elytra",
+  "fluxxy_pvp.setting.elytra_pitch.tooltip": "En vol, affiche sous le viseur l'angle où tu regardes : + vers le haut, - vers le bas."
+}

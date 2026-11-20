@@ -1,0 +1,13 @@
+{
+  "fluxxy_pvp.setting.low_fire": "Low fire",
+  "fluxxy_pvp.setting.low_fire.tooltip": "Draw the burning overlay lower on the screen, so it hides less of the view.",
+  "fluxxy_pvp.setting.fire_height": "Fire height",
+  "fluxxy_pvp.setting.fire_height.tooltip": "How far down the fire goes when Low fire is on.",
+  "fluxxy_pvp.fire_height.low": "Low",
+  "fluxxy_pvp.fire_height.lower": "Lower",
+  "fluxxy_pvp.fire_height.lowest": "Lowest",
+  "fluxxy_pvp.setting.food_info": "Food info",
+  "fluxxy_pvp.setting.food_info.tooltip": "Show your saturation over the hunger bar, and how close the next hunger point is to going as a thin bar above it.",
+  "fluxxy_pvp.setting.elytra_pitch": "Elytra pitch",
+  "fluxxy_pvp.setting.elytra_pitch.tooltip": "While gliding, show the angle you look at under the crosshair: up is +, down is -."
+}
