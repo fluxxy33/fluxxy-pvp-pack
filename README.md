@@ -8,10 +8,10 @@ its own switch in **Options > Mods > Fluxxy's PvP Pack > Config**.
 - **Food info**: your saturation as a gold outline over the hunger bar (2 points an icon, as the food icons), and a
   thin bar above the row that fills as the next hunger point gets close to going (exhaustion, 0 to 4). Only in
   survival and adventure, and not while a mount's hearts take the row's place.
-- **Elytra pitch**: while gliding, the angle you look at under the crosshair, in whole degrees as the debug screen
-  gives it (positive looking down).
-- **Armor HUD**: your boots, leggings, chestplate and helmet, with their durability bars, in slots left of the off hand's
-  slot. They are only drawn: nothing can be clicked or moved there.
+- **Elytra pitch**: while gliding, the angle you look at under the crosshair, in whole degrees: positive looking up,
+  negative looking down.
+- **Armor HUD**: the boots, leggings, chestplate and helmet you wear, with their durability bars, in slots left of the
+  off hand's slot: a slot shows only for a piece worn. They are only drawn: nothing can be clicked or moved there.
 - **Item counters**: how many golden apples, ender pearls, totems, arrows, potions and cobwebs you carry (off hand
   included), in a column of slots in the bottom right corner. A kind you don't carry takes no slot.
 - **Damage indicator**: how many hearts a hit took, in red above your hearts, for a moment and a half; hits close

@@ -145,10 +145,11 @@ const TEXT_INK: u32 = 0xFFFF_FFFF;
 /// GUI pixels below the middle of the screen: under the crosshair, clear of it.
 const PITCH_BELOW: f32 = 44.0;
 
-/// What shows under the crosshair: the game's own pitch (F3's), in whole degrees: 0 level,
-/// positive looking down, negative looking up.
+/// What shows under the crosshair: the angle above the horizon in whole degrees, positive
+/// looking up and negative looking down. The game's pitch is the other way round (positive
+/// looking down), so its sign is turned.
 pub fn pitch_text(pitch: f32) -> String {
-    let degrees = pitch.round() as i32;
+    let degrees = (-pitch).round() as i32;
     format!("{degrees}°")
 }
 
@@ -396,12 +397,13 @@ impl Hooks for Pack {
         if toggle(host, "armor_hud")
             && let Some(living) = living
         {
+            // A slot only for a piece worn, in its own place: nothing worn, no row.
             let at = armor_row(size);
-            slot_frame(draw, at, ARMOR.len());
             for (i, slot) in ARMOR.into_iter().enumerate() {
                 if let Some(stack) = living.equipment(world, slot) {
-                    let x = at[0] + 3.0 + i as f32 * SLOT;
-                    draw.item_stack(&stack, [x, at[1] + 3.0], 16.0);
+                    let x = at[0] + i as f32 * SLOT;
+                    slot_frame(draw, [x, at[1]], 1);
+                    draw.item_stack(&stack, [x + 3.0, at[1] + 3.0], 16.0);
                 }
             }
         }
@@ -535,10 +537,11 @@ mod tests {
     }
 
     #[test]
-    fn pitch_is_the_games_in_whole_degrees() {
-        assert_eq!(pitch_text(17.4), "17°");
-        assert_eq!(pitch_text(-30.6), "-31°");
-        assert_eq!(pitch_text(0.2), "0°");
+    fn pitch_is_positive_looking_up_in_whole_degrees() {
+        // The game's pitch is positive looking down.
+        assert_eq!(pitch_text(-17.4), "17°");
+        assert_eq!(pitch_text(30.6), "-31°");
+        assert_eq!(pitch_text(-0.2), "0°");
     }
 
     #[test]
