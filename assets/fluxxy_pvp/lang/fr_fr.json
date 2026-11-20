@@ -15,5 +15,6 @@
   "fluxxy_pvp.setting.item_counters": "Compteurs d'objets",
   "fluxxy_pvp.setting.item_counters.tooltip": "Affiche en bas à droite combien tu as de pommes d'or, perles de l'Ender, totems, flèches, potions et toiles d'araignée.",
   "fluxxy_pvp.setting.damage_indicator": "Indicateur de dégâts",
-  "fluxxy_pvp.setting.damage_indicator.tooltip": "Affiche un instant, au-dessus de tes cœurs, combien de cœurs un coup t'a fait perdre."
+  "fluxxy_pvp.setting.damage_indicator.tooltip": "Affiche un instant, au-dessus de tes cœurs, combien de cœurs un coup t'a fait perdre.",
+  "fluxxy_pvp.tooltip.food": "Faim : %s · Saturation : %s"
 }

@@ -15,5 +15,6 @@
   "fluxxy_pvp.setting.item_counters": "Item counters",
   "fluxxy_pvp.setting.item_counters.tooltip": "Show how many golden apples, ender pearls, totems, arrows, potions and cobwebs you carry, bottom right.",
   "fluxxy_pvp.setting.damage_indicator": "Damage indicator",
-  "fluxxy_pvp.setting.damage_indicator.tooltip": "Show how many hearts a hit took, above your hearts, for a moment."
+  "fluxxy_pvp.setting.damage_indicator.tooltip": "Show how many hearts a hit took, above your hearts, for a moment.",
+  "fluxxy_pvp.tooltip.food": "Hunger: %s · Saturation: %s"
 }

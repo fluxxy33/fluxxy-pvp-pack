@@ -6,7 +6,8 @@ its own switch in **Options > Mods > Fluxxy's PvP Pack > Config**.
 - **Low fire**: while you burn, the fire overlay is drawn lower on the screen, so it hides less of the view. Three
   heights: Low, Lower (default), Lowest. Off: vanilla's fire.
 - **Food info**: AppleSkin's saturation outlines over the hunger bar (2 points an icon, in quarters) and its exhaustion
-  bar under the row, filling from the right as the next hunger point gets close to going. Only in survival and
+  bar under the row, filling from the right as the next hunger point gets close to going. With food in hand, the hunger,
+  saturation and hearts eating it would give flash over the bars; a food's tooltip says its hunger and saturation. Only in survival and
   adventure, and not while a mount's hearts take the row's place.
 - **Elytra pitch**: while gliding, the angle you look at under the crosshair, in whole degrees: positive looking up,
   negative looking down.

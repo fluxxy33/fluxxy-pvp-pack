@@ -17,6 +17,7 @@ use std::sync::Mutex;
 mod appleskin_icons;
 
 use mod_api::{
+    ComponentId, ItemResource, ItemTooltipEvent, Text,
     AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, ServerHost, ServerTickEvent,
     ServerTickPhase, Tag,
     EquipmentSlot, ItemStack, RenderFramePreEvent,
@@ -167,6 +168,134 @@ fn shown_food(host: &dyn ClientHost) -> Option<mod_api::PlayerFood> {
         return None;
     }
     player.food(world)
+}
+
+/// A food's values (`minecraft:food`): the hunger points it gives, and the saturation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FoodValues {
+    pub nutrition: i32,
+    pub saturation: f32,
+}
+
+/// `stack`'s food values, its own `minecraft:food` or its item's; None for what isn't food.
+fn food_values(host: &dyn Host, stack: &ItemStack) -> Option<FoodValues> {
+    let id = ComponentId::new("minecraft:food")?;
+    let Tag::Compound(food) = ItemResource::of(stack).value(host, &id)? else {
+        return None;
+    };
+    let number = |key: &str| match food.get(&key.into())? {
+        Tag::Byte(n) => Some(f64::from(*n)),
+        Tag::Short(n) => Some(f64::from(*n)),
+        Tag::Int(n) => Some(f64::from(*n)),
+        Tag::Long(n) => Some(*n as f64),
+        Tag::Float(bits) => Some(f64::from(f32::from_bits(*bits))),
+        Tag::Double(bits) => Some(f64::from_bits(*bits)),
+        _ => None,
+    };
+    Some(FoodValues {
+        nutrition: number("nutrition")? as i32,
+        saturation: number("saturation").unwrap_or(0.0) as f32,
+    })
+}
+
+/// AppleSkin's flash: up 0.125 a tick from -0.5 to 1.5 and back, clamped to 0..1, times 0.65
+/// (its `maxHudOverlayFlashAlpha`). `ticks` counts client ticks since the food came in hand.
+pub fn flash_alpha(ticks: f64) -> f32 {
+    // A period of 32 ticks: 16 up from -0.5 to 1.5, 16 down; it starts at 0, rising.
+    let phase = (ticks + 4.0).rem_euclid(32.0);
+    let unclamped = if phase < 16.0 { -0.5 + phase * 0.125 } else { 1.5 - (phase - 16.0) * 0.125 };
+    (unclamped.clamp(0.0, 1.0) * 0.65) as f32
+}
+
+/// The hunger icons a food would fill: `(icon index, half)` from the current food level's last
+/// icon to the new one's (`HUDOverlayHandler.drawHungerOverlay`).
+pub fn hunger_gained(food: i32, nutrition: i32) -> Vec<(usize, bool)> {
+    if nutrition <= 0 {
+        return Vec::new();
+    }
+    let modified = (food + nutrition).clamp(0, 20);
+    let start = (food / 2).max(0);
+    let end = (modified + 1) / 2;
+    (start..end).map(|i| (i as usize, i * 2 + 1 == modified)).collect()
+}
+
+/// The saturation a food adds, AppleSkin's way: capped by the new food level.
+pub fn saturation_gained(food: i32, saturation: f32, values: FoodValues) -> f32 {
+    let new_food = (food + values.nutrition) as f32;
+    if saturation + values.saturation > new_food {
+        new_food - saturation
+    } else {
+        values.saturation
+    }
+}
+
+/// The saturation outlines a gain adds: from the current saturation's last icon on, at
+/// AppleSkin's flash (`drawSaturationOverlay` with a gain).
+pub fn saturation_gain_icons(right: f32, saturation: f32, gained: f32) -> Vec<(f32, usize)> {
+    if saturation + gained < 0.0 {
+        return Vec::new();
+    }
+    let start = (saturation / 2.0).max(0.0) as usize;
+    saturation_icons(right, saturation + gained).split_off(start.min(10))
+}
+
+/// The health a food gives through natural regeneration once eaten, as AppleSkin estimates it
+/// (`FoodHelper.getEstimatedHealthIncrement`), for a player at `food` and `saturation` with
+/// `exhaustion`, not counting effects.
+pub fn estimated_health(food: i32, saturation: f32, exhaustion: f32, values: FoodValues) -> f32 {
+    let mut food = (food + values.nutrition).min(20);
+    if food < 18 {
+        return 0.0;
+    }
+    let mut saturation = (saturation + values.saturation).min(food as f32);
+    let mut exhaustion = exhaustion;
+    let mut health = 0.0;
+    if !exhaustion.is_finite() || !saturation.is_finite() {
+        return 0.0;
+    }
+    while food >= 18 {
+        while exhaustion > EXHAUSTION_MAX {
+            exhaustion -= EXHAUSTION_MAX;
+            if saturation > 0.0 {
+                saturation = (saturation - 1.0).max(0.0);
+            } else {
+                food -= 1;
+            }
+        }
+        if food >= 20 && saturation > f32::MIN_POSITIVE {
+            let limited = saturation.min(REGEN_EXHAUSTION);
+            let until = next_up(EXHAUSTION_MAX) - exhaustion;
+            let steps = ((until / limited).ceil() as i32).max(1);
+            health += limited / REGEN_EXHAUSTION * steps as f32;
+            exhaustion += limited * steps as f32;
+        } else if food >= 18 {
+            health += 1.0;
+            exhaustion += REGEN_EXHAUSTION;
+        }
+    }
+    health
+}
+
+/// The tooltip line's gold.
+const TOOLTIP_INK: u32 = 0xFFAA_00FF;
+
+/// Exhaustion one point of natural regeneration costs (`FoodData.tick`).
+const REGEN_EXHAUSTION: f32 = 6.0;
+
+/// `Math.nextUp` for a positive float.
+fn next_up(x: f32) -> f32 {
+    f32::from_bits(x.to_bits() + 1)
+}
+
+/// The food in the local player's main hand, else their off hand, as AppleSkin looks for it.
+fn held_food(host: &dyn ClientHost) -> Option<FoodValues> {
+    let player = host.local_player()?;
+    let world: &dyn Host = host;
+    let living = host.living(player.entity())?;
+    [EquipmentSlot::MainHand, EquipmentSlot::OffHand]
+        .into_iter()
+        .filter_map(|slot| living.equipment(world, slot))
+        .find_map(|stack| food_values(world, &stack))
 }
 
 /// The server's saturation and exhaustion of each player, sent to that player's client (`sync`),
@@ -361,6 +490,10 @@ struct Frame {
     /// server doesn't run this mod: then the saturation is the one vanilla sent, and there is no
     /// exhaustion bar (the client has no true value to show).
     synced: Option<[f32; 2]>,
+    /// Client ticks (a twentieth of a second each) since food came in hand, for the flash.
+    flash_ticks: f64,
+    /// The food in hand last frame.
+    held: Option<FoodValues>,
 }
 
 #[derive(Default)]
@@ -425,6 +558,24 @@ impl Hooks for Pack {
         event.replace_vanilla = drawn;
     }
 
+    /// A food's hunger and saturation in its tooltip, as AppleSkin adds them.
+    fn item_tooltip(&self, host: &dyn ClientHost, event: &mut ItemTooltipEvent<'_>) {
+        if !toggle(host, "food_info") {
+            return;
+        }
+        let Some(values) = food_values(host, event.stack) else {
+            return;
+        };
+        let line = Text::translate(
+            "fluxxy_pvp.tooltip.food",
+            vec![
+                Text::literal(values.nutrition.to_string()),
+                Text::literal(format!("{:.1}", values.saturation)),
+            ],
+        );
+        event.lines.push((line, TOOLTIP_INK));
+    }
+
     /// At the end of each server tick, each player's exhaustion to their client, when it changed.
     fn server_tick(&self, host: &mut dyn ServerHost, event: &mut ServerTickEvent) {
         if !matches!(event.phase, ServerTickPhase::ServerTickEnd { .. }) {
@@ -470,9 +621,62 @@ impl Hooks for Pack {
         let draw = &mut *event.draw;
         let (right, top) = food_row(draw.size());
         // The server's saturation when it sent it, else the one vanilla sent with the food.
-        let saturation = self.frame().synced.map_or(food.saturation, |[s, _]| s);
+        let (synced, held, ticks) = {
+            let frame = self.frame();
+            (frame.synced, frame.held, frame.flash_ticks)
+        };
+        let saturation = synced.map_or(food.saturation, |[s, _]| s);
         for (x, variant) in saturation_icons(right, saturation) {
             draw_runs(draw, appleskin_icons::SATURATION[variant], [x, top], 0, 255);
+        }
+        // Food in hand: what eating it would give, flashing, as AppleSkin shows it.
+        let Some(values) = held else {
+            return;
+        };
+        let alpha = flash_alpha(ticks);
+        let a = (alpha * 255.0) as u32;
+        let tint = |a: u32| Some((a << 24) | 0x00FF_FFFF);
+        for (i, half) in hunger_gained(food.level, values.nutrition) {
+            let x = right - i as f32 * ICON_STEP - ICON;
+            let cell = [x, top, ICON, ICON];
+            let src = [0.0, 0.0, ICON, ICON];
+            draw.sprite("hud/food_empty", src, cell, tint(a / 4));
+            draw.sprite(if half { "hud/food_half" } else { "hud/food_full" }, src, cell, tint(a));
+        }
+        let gained = saturation_gained(food.level, saturation, values);
+        for (x, variant) in saturation_gain_icons(right, saturation, gained) {
+            draw_runs(draw, appleskin_icons::SATURATION[variant], [x, top], 0, a);
+        }
+        // Hearts it would bring back, under 18 food, as AppleSkin shows them.
+        let Some(player) = host.local_player() else {
+            return;
+        };
+        let world: &dyn Host = host;
+        let Some(living) = host.living(player.entity()) else {
+            return;
+        };
+        let (Some(health), Some(max)) = (living.health(world), living.max_health(world)) else {
+            return;
+        };
+        let exhaustion = synced.map_or(0.0, |[_, e]| e);
+        if food.level >= 18 || health >= max {
+            return;
+        }
+        let gain = estimated_health(food.level, saturation, exhaustion, values);
+        let modified = (health + gain).min(max);
+        if modified <= health {
+            return;
+        }
+        let left = (draw.size()[0] / 2.0).floor() - HOTBAR_HALF;
+        let start = (health.ceil() / 2.0) as usize;
+        let end = (modified / 2.0).ceil() as usize;
+        let whole = modified.ceil() as usize;
+        for i in start..end.min(10) {
+            let cell = [left + i as f32 * ICON_STEP, top, ICON, ICON];
+            let src = [0.0, 0.0, ICON, ICON];
+            draw.sprite("hud/heart/container", src, cell, tint(a / 4));
+            let half = i * 2 + 1 == whole;
+            draw.sprite(if half { "hud/heart/half" } else { "hud/heart/full" }, src, cell, tint(a));
         }
     }
 
@@ -491,9 +695,19 @@ impl Hooks for Pack {
             EXHAUSTION.get_existing(host, Holder::Player(uuid)).ok().flatten()
         });
         let seconds = event.elapsed.as_secs_f64();
+        let held = {
+            let host: &dyn ClientHost = host;
+            held_food(host)
+        };
         let mut frame = self.frame();
         frame.damage.frame(health, seconds);
         frame.synced = synced;
+        if held.is_some() && held == frame.held {
+            frame.flash_ticks += seconds * 20.0;
+        } else {
+            frame.flash_ticks = 0.0;
+        }
+        frame.held = held;
     }
 
     /// The armour row, the counters, the damage taken and the pitch, over the HUD.
@@ -634,6 +848,42 @@ mod tests {
         assert_eq!(saturation_icons(251.0, 20.0).len(), 10);
         assert_eq!(saturation_icons(251.0, 1.6), vec![(242.0, 2)]);
         assert_eq!(saturation_icons(251.0, 0.3), vec![(242.0, 0)]);
+    }
+
+    #[test]
+    fn the_flash_rises_holds_and_falls_as_appleskins() {
+        assert_eq!(flash_alpha(0.0), 0.0);
+        assert!((flash_alpha(4.0) - 0.325).abs() < 1e-6);
+        assert!((flash_alpha(10.0) - 0.65).abs() < 1e-6);
+        assert!((flash_alpha(20.0) - 0.325).abs() < 1e-6);
+        assert_eq!(flash_alpha(28.0), 0.0);
+    }
+
+    #[test]
+    fn eating_fills_hunger_from_the_last_icon() {
+        // At 13 food, bread (5) brings 18: icons 6 to 8, none half.
+        assert_eq!(hunger_gained(13, 5), vec![(6, false), (7, false), (8, false)]);
+        // At 16, an apple (4) caps at 20.
+        assert_eq!(hunger_gained(16, 4), vec![(8, false), (9, false)]);
+        // A cookie (2) at 3: the half icon ends at 5.
+        assert_eq!(hunger_gained(3, 2), vec![(1, false), (2, true)]);
+        assert!(hunger_gained(10, 0).is_empty());
+    }
+
+    #[test]
+    fn saturation_gained_stops_at_the_new_food_level() {
+        let steak = FoodValues { nutrition: 8, saturation: 12.8 };
+        assert_eq!(saturation_gained(10, 0.0, steak), 12.8);
+        // At 10 food and 8 saturation, 18 food caps it: 10 more.
+        assert_eq!(saturation_gained(10, 8.0, steak), 10.0);
+    }
+
+    #[test]
+    fn health_comes_back_only_from_eighteen_food() {
+        let bread = FoodValues { nutrition: 5, saturation: 6.0 };
+        assert_eq!(estimated_health(10, 0.0, 0.0, bread), 0.0);
+        // 13 + 5 = 18: slow regen until food drops under 18.
+        assert!(estimated_health(13, 0.0, 0.0, bread) >= 1.0);
     }
 
     #[test]
