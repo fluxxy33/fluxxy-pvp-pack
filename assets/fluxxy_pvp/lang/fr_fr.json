@@ -7,7 +7,7 @@
   "fluxxy_pvp.fire_height.lower": "Plus bas",
   "fluxxy_pvp.fire_height.lowest": "Tout en bas",
   "fluxxy_pvp.setting.food_info": "Infos de faim",
-  "fluxxy_pvp.setting.food_info.tooltip": "Affiche ta saturation sur la barre de faim, et une fine barre au-dessus qui montre quand le prochain point de faim va partir.",
+  "fluxxy_pvp.setting.food_info.tooltip": "Les contours de saturation d'AppleSkin sur la barre de faim, et sa barre d'épuisement dessous : quand le prochain point de faim va partir.",
   "fluxxy_pvp.setting.elytra_pitch": "Angle en elytra",
   "fluxxy_pvp.setting.elytra_pitch.tooltip": "En vol, affiche sous le viseur l'angle où tu regardes : positif vers le haut, négatif vers le bas.",
   "fluxxy_pvp.setting.armor_hud": "Armure à l'écran",

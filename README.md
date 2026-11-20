@@ -5,9 +5,9 @@ its own switch in **Options > Mods > Fluxxy's PvP Pack > Config**.
 
 - **Low fire**: while you burn, the fire overlay is drawn lower on the screen, so it hides less of the view. Three
   heights: Low, Lower (default), Lowest. Off: vanilla's fire.
-- **Food info**: your saturation as a gold outline over the hunger bar (2 points an icon, as the food icons), and a
-  thin bar above the row that fills as the next hunger point gets close to going (exhaustion, 0 to 4). Only in
-  survival and adventure, and not while a mount's hearts take the row's place.
+- **Food info**: AppleSkin's saturation outlines over the hunger bar (2 points an icon, in quarters) and its exhaustion
+  bar under the row, filling from the right as the next hunger point gets close to going. Only in survival and
+  adventure, and not while a mount's hearts take the row's place.
 - **Elytra pitch**: while gliding, the angle you look at under the crosshair, in whole degrees: positive looking up,
   negative looking down.
 - **Armor HUD**: the boots, leggings, chestplate and helmet you wear, with their durability bars, in slots left of the
@@ -22,10 +22,12 @@ refuse ([mod policy](https://github.com/horizon-rust/horizon-mods/blob/main/MOD-
 
 ## Credits
 
-The ideas come from Java Edition mods and packs players know: AppleSkin (saturation and exhaustion on the hunger bar),
-PVP Essentials (armour HUD, item counters, damage indicator, low fire), "low fire" resource packs and elytra HUD mods.
-No code, texture or other file of theirs is in this mod: everything is drawn by its own code, with the game's own fire
-and hotbar sprites.
+- **Food info is ported from [AppleSkin](https://github.com/squeek502/AppleSkin)** by squeek502, released into the
+  public domain (the Unlicense): its saturation and exhaustion pixels (`src/appleskin_icons.rs`, generated from its
+  `textures/icons.png`) and the way it picks and places them (`HUDOverlayHandler`).
+- The other helpers are this mod's own code, on ideas from PVP Essentials (armour HUD, item counters, damage indicator,
+  low fire), "low fire" resource packs and elytra HUD mods; no code or texture of theirs is in it. They draw with the
+  game's own fire and hotbar sprites.
 
 ## Install
 

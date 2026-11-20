@@ -7,7 +7,7 @@
   "fluxxy_pvp.fire_height.lower": "Lower",
   "fluxxy_pvp.fire_height.lowest": "Lowest",
   "fluxxy_pvp.setting.food_info": "Food info",
-  "fluxxy_pvp.setting.food_info.tooltip": "Show your saturation over the hunger bar, and how close the next hunger point is to going as a thin bar above it.",
+  "fluxxy_pvp.setting.food_info.tooltip": "AppleSkin's saturation outlines over the hunger bar, and its exhaustion bar under it: how close the next hunger point is to going.",
   "fluxxy_pvp.setting.elytra_pitch": "Elytra pitch",
   "fluxxy_pvp.setting.elytra_pitch.tooltip": "While gliding, show the angle you look at under the crosshair: positive looking up, negative looking down.",
   "fluxxy_pvp.setting.armor_hud": "Armor HUD",

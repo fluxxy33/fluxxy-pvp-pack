@@ -2,8 +2,8 @@
 //! Options > Mods > Fluxxy's PvP Pack.
 //!
 //! - **Low fire**: the burning overlay drawn lower on the screen, so it covers less of the view.
-//! - **Food info**: the saturation you have left drawn over the hunger bar, and how close the next
-//!   hunger point is to going (exhaustion), as a thin bar above it.
+//! - **Food info**: AppleSkin's saturation outlines over the hunger bar and its exhaustion bar
+//!   under it, with AppleSkin's own pixels (public domain).
 //! - **Elytra pitch**: while gliding, the angle you look at, under the crosshair.
 //! - **Armor HUD**: your four armour pieces, with their durability bars, in slots left of the
 //!   hotbar. They are only drawn: nothing can be clicked or moved there.
@@ -14,10 +14,12 @@
 //! Everything here is drawn by the mod itself: no texture or code of another mod is used.
 use std::sync::Mutex;
 
+mod appleskin_icons;
+
 use mod_api::{
     EquipmentSlot, ItemStack, RenderFramePreEvent,
     BlockScreenEffect, Host, BlockScreenEffectDrawEvent, ClientHost, ExtractBlockScreenEffectEvent, Flow,
-    GuiLayerPostEvent, Hooks, Registrar, RegistrationContext, RenderGuiPostEvent, SettingSpec,
+    GuiLayerPostEvent, GuiLayerPreEvent, Hooks, Registrar, RegistrationContext, RenderGuiPostEvent, SettingSpec,
 };
 
 /// The mod's id: its settings folder.
@@ -89,51 +91,80 @@ const FOOD_RIGHT: f32 = 91.0;
 const FOOD_ABOVE_BOTTOM: f32 = 39.0;
 const ICON: f32 = 9.0;
 const ICON_STEP: f32 = 8.0;
-/// Saturation's outline: gold, as players know it from food mods.
-const SATURATION_INK: u32 = 0xFFFF_D700;
-/// Exhaustion's bar: translucent white, 1 pixel high, just above the row.
-const EXHAUSTION_INK: u32 = 0x80FF_FFFF;
 /// Exhaustion takes a hunger point (or saturation) away when it reaches 4 (`FoodData.tick`).
 const EXHAUSTION_MAX: f32 = 4.0;
+/// The exhaustion bar's opacity, as AppleSkin draws it (0.75).
+const EXHAUSTION_ALPHA: u32 = 0xBF;
 
-/// How full each of the ten saturation outlines is, 0 to 1, the rightmost icon first: each icon
-/// is 2 points of saturation, as each icon is 2 points of food.
-pub fn saturation_icons(saturation: f32) -> [f32; 10] {
-    std::array::from_fn(|i| ((saturation - 2.0 * i as f32) / 2.0).clamp(0.0, 1.0))
+/// The saturation outlines AppleSkin draws over the food row: `(icon x, variant)` with `variant`
+/// 0 to 3 the quarter, half, three-quarter and whole outline of `appleskin_icons::SATURATION`.
+/// Each icon is 2 points of saturation, from the right (`HUDOverlayHandler.drawSaturationOverlay`).
+pub fn saturation_icons(right: f32, saturation: f32) -> Vec<(f32, usize)> {
+    let saturation = saturation.clamp(0.0, 20.0);
+    let icons = (saturation / 2.0).ceil() as usize;
+    (0..icons)
+        .map(|i| {
+            let part = saturation / 2.0 - i as f32;
+            let variant = if part >= 1.0 {
+                3
+            } else if part > 0.5 {
+                2
+            } else if part > 0.25 {
+                1
+            } else {
+                0
+            };
+            (right - i as f32 * ICON_STEP - ICON, variant)
+        })
+        .collect()
 }
 
-/// How much of the row's width the exhaustion bar takes, 0 to 1.
-pub fn exhaustion_share(exhaustion: f32) -> f32 {
-    (exhaustion / EXHAUSTION_MAX).clamp(0.0, 1.0)
+/// How many of the exhaustion bar's 81 pixels show, from its right edge
+/// (`HUDOverlayHandler.drawExhaustionOverlay`).
+pub fn exhaustion_width(exhaustion: f32) -> u8 {
+    ((exhaustion / EXHAUSTION_MAX).clamp(0.0, 1.0) * 81.0) as u8
 }
 
-/// The rectangles `[x, y, w, h]` that draw the food info on a GUI of `size`: an outline around
-/// the part of each icon the saturation fills, then the exhaustion bar.
-pub fn food_rects(size: [f32; 2], saturation: f32, exhaustion: f32) -> Vec<([f32; 4], u32)> {
-    let right = (size[0] / 2.0).floor() + FOOD_RIGHT;
-    let top = size[1] - FOOD_ABOVE_BOTTOM;
-    let mut rects = Vec::new();
-    for (i, fill) in saturation_icons(saturation).into_iter().enumerate() {
-        if fill <= 0.0 {
+/// The food row's right edge and top on a GUI of `size`.
+fn food_row(size: [f32; 2]) -> (f32, f32) {
+    ((size[0] / 2.0).floor() + FOOD_RIGHT, size[1] - FOOD_ABOVE_BOTTOM)
+}
+
+/// Draw runs of pixels at `at`, keeping only the columns from `from` on, times `alpha` (0-255).
+fn draw_runs(
+    draw: &mut dyn mod_api::DrawContext,
+    runs: &[(u8, u8, u8, u32)],
+    at: [f32; 2],
+    from: u8,
+    alpha: u32,
+) {
+    for &(x, y, w, argb) in runs {
+        let (start, end) = (x.max(from), x + w);
+        if start >= end {
             continue;
         }
-        // The icon's box, filled from its right edge as vanilla fills half shanks.
-        let width = (ICON * fill).max(1.0);
-        let x = right - i as f32 * ICON_STEP - ICON + (ICON - width);
-        rects.push(([x, top, width, 1.0], SATURATION_INK));
-        rects.push(([x, top + ICON - 1.0, width, 1.0], SATURATION_INK));
-        rects.push(([x + width - 1.0, top, 1.0, ICON], SATURATION_INK));
-        if fill >= 1.0 {
-            rects.push(([x, top, 1.0, ICON], SATURATION_INK));
-        }
+        let a = ((argb >> 24) * alpha / 255) << 24;
+        let rect = [at[0] + start as f32, at[1] + y as f32, (end - start) as f32, 1.0];
+        draw.fill(rect, a | (argb & 0x00FF_FFFF));
     }
-    let share = exhaustion_share(exhaustion);
-    if share > 0.0 {
-        let row = ICON_STEP * 9.0 + ICON;
-        let width = row * share;
-        rects.push(([right - width, top - 2.0, width, 1.0], EXHAUSTION_INK));
+}
+
+/// Whether the food row shows: the local player in survival or adventure, not on a mount whose
+/// hearts take its place. Their food when it does.
+fn shown_food(host: &dyn ClientHost) -> Option<mod_api::PlayerFood> {
+    let player = host.local_player()?;
+    let world: &dyn Host = host;
+    let survival =
+        player.is_creative(world) == Some(false) && player.is_spectator(world) == Some(false);
+    let mounted = player
+        .entity()
+        .vehicle(world)
+        .and_then(|v| host.living(v))
+        .is_some_and(|v| v.health(world).is_some());
+    if !survival || mounted {
+        return None;
     }
-    rects
+    player.food(world)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -337,32 +368,33 @@ impl Hooks for Pack {
         event.replace_vanilla = drawn;
     }
 
-    /// Saturation and exhaustion over the hunger bar.
+    /// AppleSkin's exhaustion bar, under the food row.
+    fn gui_layer_pre(&self, host: &dyn ClientHost, event: &mut GuiLayerPreEvent<'_>) -> Flow {
+        if event.layer == "minecraft:player_health"
+            && toggle(host, "food_info")
+            && let Some(food) = shown_food(host)
+        {
+            let draw = &mut *event.draw;
+            let (right, top) = food_row(draw.size());
+            let from = 81 - exhaustion_width(food.exhaustion);
+            let at = [right - 81.0, top];
+            draw_runs(draw, appleskin_icons::EXHAUSTION, at, from, EXHAUSTION_ALPHA);
+        }
+        Flow::Continue
+    }
+
+    /// AppleSkin's saturation outlines, over the food row.
     fn gui_layer_post(&self, host: &dyn ClientHost, event: &mut GuiLayerPostEvent<'_>) {
         if event.layer != "minecraft:player_health" || !toggle(host, "food_info") {
             return;
         }
-        let Some(player) = host.local_player() else {
-            return;
-        };
-        let world: &dyn Host = host;
-        let survival = player.is_creative(world) == Some(false)
-            && player.is_spectator(world) == Some(false);
-        // On a mount with health, its hearts take the food row's place.
-        let mounted = player
-            .entity()
-            .vehicle(world)
-            .and_then(|v| host.living(v))
-            .is_some_and(|v| v.health(world).is_some());
-        if !survival || mounted {
-            return;
-        }
-        let Some(food) = player.food(world) else {
+        let Some(food) = shown_food(host) else {
             return;
         };
         let draw = &mut *event.draw;
-        for (rect, ink) in food_rects(draw.size(), food.saturation, food.exhaustion) {
-            draw.fill(rect, ink);
+        let (right, top) = food_row(draw.size());
+        for (x, variant) in saturation_icons(right, food.saturation) {
+            draw_runs(draw, appleskin_icons::SATURATION[variant], [x, top], 0, 255);
         }
     }
 
@@ -508,32 +540,22 @@ mod tests {
     }
 
     #[test]
-    fn saturation_fills_two_points_an_icon_from_the_right() {
-        let icons = saturation_icons(5.0);
-        assert_eq!(&icons[..4], &[1.0, 1.0, 0.5, 0.0]);
-        assert_eq!(saturation_icons(20.0), [1.0; 10]);
-        assert_eq!(saturation_icons(0.0), [0.0; 10]);
+    fn saturation_takes_appleskins_outlines_from_the_right() {
+        // 5 saturation: two whole icons, then half of one (0.5 is not over a half: the quarter's
+        // three-quarter outline is for over 0.5).
+        let icons = saturation_icons(251.0, 5.0);
+        assert_eq!(icons, vec![(242.0, 3), (234.0, 3), (226.0, 1)]);
+        assert_eq!(saturation_icons(251.0, 0.0), vec![]);
+        assert_eq!(saturation_icons(251.0, 20.0).len(), 10);
+        assert_eq!(saturation_icons(251.0, 1.6), vec![(242.0, 2)]);
+        assert_eq!(saturation_icons(251.0, 0.3), vec![(242.0, 0)]);
     }
 
     #[test]
-    fn exhaustion_is_a_share_of_four() {
-        assert_eq!(exhaustion_share(0.0), 0.0);
-        assert_eq!(exhaustion_share(1.0), 0.25);
-        assert_eq!(exhaustion_share(7.0), 1.0);
-    }
-
-    #[test]
-    fn the_food_info_sits_on_vanillas_food_row() {
-        // A 320 x 240 GUI: the row's right edge is at 160 + 91, its top at 240 - 39.
-        let rects = food_rects([320.0, 240.0], 2.0, 0.0);
-        let right = rects.iter().map(|(r, _)| r[0] + r[2]).fold(0.0, f32::max);
-        assert_eq!(right, 251.0);
-        assert!(rects.iter().all(|(r, _)| r[1] >= 201.0 && r[1] + r[3] <= 210.0));
-        // Nothing to show: nothing drawn.
-        assert!(food_rects([320.0, 240.0], 0.0, 0.0).is_empty());
-        // The exhaustion bar ends at the row's right edge, above it.
-        let bar = food_rects([320.0, 240.0], 0.0, 2.0);
-        assert_eq!(bar, vec![([251.0 - 40.5, 199.0, 40.5, 1.0], EXHAUSTION_INK)]);
+    fn exhaustion_fills_the_row_as_it_nears_four() {
+        assert_eq!(exhaustion_width(0.0), 0);
+        assert_eq!(exhaustion_width(2.0), 40);
+        assert_eq!(exhaustion_width(9.0), 81);
     }
 
     #[test]
