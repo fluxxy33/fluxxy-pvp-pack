@@ -39,6 +39,9 @@ your computer.
 - The fire is drawn with the game's `block/fire_1` sprite. If a resource pack has no such sprite, the mod leaves
   vanilla's fire as it is.
 - Food info draws on vanilla's place for the food row; a mod that moves that row would leave the outline behind.
+- The exhaustion bar needs this mod on the server too, as AppleSkin's does: vanilla sends a client its food and
+  saturation but never its exhaustion, so the server's part sends it. In single player the game's own server runs the
+  mod; on a server without it, the bar stays hidden (the saturation outlines still show).
 - Potions are counted together, whatever their effect: the mod doesn't read a potion's contents.
 - The damage indicator shows the damage you take; the damage you deal isn't shown yet.
 - Hiding potion and explosion particles, as some PvP mods do, isn't there: the mod API has no hook for it on the

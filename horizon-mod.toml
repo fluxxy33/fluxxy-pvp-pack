@@ -6,9 +6,9 @@ authors = ["fluxxy33"]
 license = "MIT"
 homepage = "https://github.com/fluxxy33/fluxxy-pvp-pack"
 api = "0.2"
-side = "client"
+side = "both"
 capabilities = ["registries"]
 
 [wasm]
-sha512 = "2fa3c62317212075742e14ec9d5e7dfaf5e569736b29fdd22610e3deede32605ed60b9316b84160e2024dd45b18279949b2f9d15757f9a8ca066118a16c06ba2"
+sha512 = "2e0120e083da46d8a5b85d41fac8f56880cb4a89e27f93d7978ee5819bc6084fdb1a967c9dd8a28fb6fe84dbdafec8d01f50bfc7347974d048768f178ea0cad9"
 toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"

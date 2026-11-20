@@ -17,6 +17,8 @@ use std::sync::Mutex;
 mod appleskin_icons;
 
 use mod_api::{
+    AttachmentCodec, AttachmentError, AttachmentType, Compound, Holder, ServerHost, ServerTickEvent,
+    ServerTickPhase, Tag,
     EquipmentSlot, ItemStack, RenderFramePreEvent,
     BlockScreenEffect, Host, BlockScreenEffectDrawEvent, ClientHost, ExtractBlockScreenEffectEvent, Flow,
     GuiLayerPostEvent, GuiLayerPreEvent, Hooks, Registrar, RegistrationContext, RenderGuiPostEvent, SettingSpec,
@@ -167,6 +169,31 @@ fn shown_food(host: &dyn ClientHost) -> Option<mod_api::PlayerFood> {
     player.food(world)
 }
 
+/// The server's exhaustion of each player, sent to that player's client (`sync`), as AppleSkin
+/// sends it: vanilla sends a client its food and saturation but never its exhaustion.
+static EXHAUSTION: AttachmentType<f32> = AttachmentType {
+    namespace: ID,
+    name: "exhaustion",
+    default: || 0.0,
+    codec: Some(AttachmentCodec {
+        encode: |value| Ok([("value".into(), Tag::Float(value.to_bits()))].into()),
+        decode: |data: &Compound| match data.get(&"value".into()) {
+            Some(Tag::Float(bits)) => Ok(f32::from_bits(*bits)),
+            _ => Err(AttachmentError::Decode),
+        },
+    }),
+    copy_on_death: false,
+    sync: true,
+};
+
+/// The exhaustion sent: a change under this is not worth a message.
+const EXHAUSTION_STEP: f32 = 0.01;
+
+/// Whether a client showing `sent` should be sent `now`.
+pub fn exhaustion_changed(sent: Option<f32>, now: f32) -> bool {
+    sent.is_none_or(|sent| (sent - now).abs() >= EXHAUSTION_STEP || (now == 0.0) != (sent == 0.0))
+}
+
 // ---------------------------------------------------------------------------------------------
 // Elytra pitch
 // ---------------------------------------------------------------------------------------------
@@ -313,9 +340,23 @@ impl DamageWatch {
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Default)]
+struct Frame {
+    damage: DamageWatch,
+    /// The server's exhaustion of the local player, as last synced; None when the server doesn't
+    /// run this mod (then no exhaustion bar: the client has no true value to show).
+    exhaustion: Option<f32>,
+}
+
+#[derive(Default)]
 struct Pack {
     // Never held across a host call: a host call can fire another of this mod's hooks.
-    damage: Mutex<DamageWatch>,
+    frame: Mutex<Frame>,
+}
+
+impl Pack {
+    fn frame(&self) -> std::sync::MutexGuard<'_, Frame> {
+        self.frame.lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 fn toggle(host: &dyn ClientHost, key: &str) -> bool {
@@ -368,15 +409,33 @@ impl Hooks for Pack {
         event.replace_vanilla = drawn;
     }
 
+    /// At the end of each server tick, each player's exhaustion to their client, when it changed.
+    fn server_tick(&self, host: &mut dyn ServerHost, event: &mut ServerTickEvent) {
+        if !matches!(event.phase, ServerTickPhase::ServerTickEnd { .. }) {
+            return;
+        }
+        for player in host.players().server_players() {
+            let Some(food) = player.food(&*host) else {
+                continue;
+            };
+            let holder = Holder::Player(player.uuid());
+            let sent = EXHAUSTION.get_existing(host, holder).ok().flatten();
+            if exhaustion_changed(sent, food.exhaustion) {
+                let _ = EXHAUSTION.set(host, holder, food.exhaustion);
+            }
+        }
+    }
+
     /// AppleSkin's exhaustion bar, under the food row.
     fn gui_layer_pre(&self, host: &dyn ClientHost, event: &mut GuiLayerPreEvent<'_>) -> Flow {
         if event.layer == "minecraft:player_health"
             && toggle(host, "food_info")
-            && let Some(food) = shown_food(host)
+            && shown_food(host).is_some()
+            && let Some(exhaustion) = self.frame().exhaustion
         {
             let draw = &mut *event.draw;
             let (right, top) = food_row(draw.size());
-            let from = 81 - exhaustion_width(food.exhaustion);
+            let from = 81 - exhaustion_width(exhaustion);
             let at = [right - 81.0, top];
             draw_runs(draw, appleskin_icons::EXHAUSTION, at, from, EXHAUSTION_ALPHA);
         }
@@ -407,8 +466,15 @@ impl Hooks for Pack {
                 .and_then(|p| host.living(p.entity()))
                 .and_then(|l| l.health(world))
         };
+        // The synced exhaustion is read here: a store read needs the mutable host.
+        let uuid = host.local_player().map(|p| p.uuid());
+        let exhaustion = uuid.and_then(|uuid| {
+            EXHAUSTION.get_existing(host, Holder::Player(uuid)).ok().flatten()
+        });
         let seconds = event.elapsed.as_secs_f64();
-        self.damage.lock().unwrap_or_else(|e| e.into_inner()).frame(health, seconds);
+        let mut frame = self.frame();
+        frame.damage.frame(health, seconds);
+        frame.exhaustion = exhaustion;
     }
 
     /// The armour row, the counters, the damage taken and the pitch, over the HUD.
@@ -465,7 +531,7 @@ impl Hooks for Pack {
             }
         }
         if toggle(host, "damage_indicator")
-            && let Some(taken) = self.damage.lock().unwrap_or_else(|e| e.into_inner()).shown()
+            && let Some(taken) = self.frame().damage.shown()
         {
             // Above the hearts: vanilla's health row is 39 pixels up, left of the middle.
             let text = damage_text(taken);
@@ -549,6 +615,15 @@ mod tests {
         assert_eq!(saturation_icons(251.0, 20.0).len(), 10);
         assert_eq!(saturation_icons(251.0, 1.6), vec![(242.0, 2)]);
         assert_eq!(saturation_icons(251.0, 0.3), vec![(242.0, 0)]);
+    }
+
+    #[test]
+    fn exhaustion_is_sent_when_it_moves() {
+        assert!(exhaustion_changed(None, 0.0));
+        assert!(!exhaustion_changed(Some(1.0), 1.005));
+        assert!(exhaustion_changed(Some(1.0), 1.02));
+        // Back to 0 when a hunger point goes: always sent.
+        assert!(exhaustion_changed(Some(0.005), 0.0));
     }
 
     #[test]
