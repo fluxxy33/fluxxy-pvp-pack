@@ -169,17 +169,28 @@ fn shown_food(host: &dyn ClientHost) -> Option<mod_api::PlayerFood> {
     player.food(world)
 }
 
-/// The server's exhaustion of each player, sent to that player's client (`sync`), as AppleSkin
-/// sends it: vanilla sends a client its food and saturation but never its exhaustion.
-static EXHAUSTION: AttachmentType<f32> = AttachmentType {
+/// The server's saturation and exhaustion of each player, sent to that player's client (`sync`),
+/// as AppleSkin sends them: vanilla sends a client its saturation only when its health or food
+/// changes (or the saturation reaches or leaves 0), and its exhaustion never.
+static EXHAUSTION: AttachmentType<[f32; 2]> = AttachmentType {
     namespace: ID,
-    name: "exhaustion",
-    default: || 0.0,
+    name: "food",
+    default: || [0.0, 0.0],
     codec: Some(AttachmentCodec {
-        encode: |value| Ok([("value".into(), Tag::Float(value.to_bits()))].into()),
-        decode: |data: &Compound| match data.get(&"value".into()) {
-            Some(Tag::Float(bits)) => Ok(f32::from_bits(*bits)),
-            _ => Err(AttachmentError::Decode),
+        encode: |[saturation, exhaustion]| {
+            Ok([
+                ("saturation".into(), Tag::Float(saturation.to_bits())),
+                ("exhaustion".into(), Tag::Float(exhaustion.to_bits())),
+            ]
+            .into())
+        },
+        decode: |data: &Compound| {
+            match (data.get(&"saturation".into()), data.get(&"exhaustion".into())) {
+                (Some(Tag::Float(s)), Some(Tag::Float(e))) => {
+                    Ok([f32::from_bits(*s), f32::from_bits(*e)])
+                }
+                _ => Err(AttachmentError::Decode),
+            }
         },
     }),
     copy_on_death: false,
@@ -189,9 +200,13 @@ static EXHAUSTION: AttachmentType<f32> = AttachmentType {
 /// The exhaustion sent: a change under this is not worth a message.
 const EXHAUSTION_STEP: f32 = 0.01;
 
-/// Whether a client showing `sent` should be sent `now`.
-pub fn exhaustion_changed(sent: Option<f32>, now: f32) -> bool {
-    sent.is_none_or(|sent| (sent - now).abs() >= EXHAUSTION_STEP || (now == 0.0) != (sent == 0.0))
+/// Whether a client showing `sent` should be sent `now` (saturation, exhaustion).
+pub fn food_changed(sent: Option<[f32; 2]>, now: [f32; 2]) -> bool {
+    sent.is_none_or(|sent| {
+        sent.iter().zip(now).any(|(&sent, now)| {
+            (sent - now).abs() >= EXHAUSTION_STEP || (now == 0.0) != (sent == 0.0)
+        })
+    })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -342,9 +357,10 @@ impl DamageWatch {
 #[derive(Default)]
 struct Frame {
     damage: DamageWatch,
-    /// The server's exhaustion of the local player, as last synced; None when the server doesn't
-    /// run this mod (then no exhaustion bar: the client has no true value to show).
-    exhaustion: Option<f32>,
+    /// The server's saturation and exhaustion of the local player, as last synced; None when the
+    /// server doesn't run this mod: then the saturation is the one vanilla sent, and there is no
+    /// exhaustion bar (the client has no true value to show).
+    synced: Option<[f32; 2]>,
 }
 
 #[derive(Default)]
@@ -420,8 +436,9 @@ impl Hooks for Pack {
             };
             let holder = Holder::Player(player.uuid());
             let sent = EXHAUSTION.get_existing(host, holder).ok().flatten();
-            if exhaustion_changed(sent, food.exhaustion) {
-                let _ = EXHAUSTION.set(host, holder, food.exhaustion);
+            let now = [food.saturation, food.exhaustion];
+            if food_changed(sent, now) {
+                let _ = EXHAUSTION.set(host, holder, now);
             }
         }
     }
@@ -431,7 +448,7 @@ impl Hooks for Pack {
         if event.layer == "minecraft:player_health"
             && toggle(host, "food_info")
             && shown_food(host).is_some()
-            && let Some(exhaustion) = self.frame().exhaustion
+            && let Some([_, exhaustion]) = self.frame().synced
         {
             let draw = &mut *event.draw;
             let (right, top) = food_row(draw.size());
@@ -452,7 +469,9 @@ impl Hooks for Pack {
         };
         let draw = &mut *event.draw;
         let (right, top) = food_row(draw.size());
-        for (x, variant) in saturation_icons(right, food.saturation) {
+        // The server's saturation when it sent it, else the one vanilla sent with the food.
+        let saturation = self.frame().synced.map_or(food.saturation, |[s, _]| s);
+        for (x, variant) in saturation_icons(right, saturation) {
             draw_runs(draw, appleskin_icons::SATURATION[variant], [x, top], 0, 255);
         }
     }
@@ -468,13 +487,13 @@ impl Hooks for Pack {
         };
         // The synced exhaustion is read here: a store read needs the mutable host.
         let uuid = host.local_player().map(|p| p.uuid());
-        let exhaustion = uuid.and_then(|uuid| {
+        let synced = uuid.and_then(|uuid| {
             EXHAUSTION.get_existing(host, Holder::Player(uuid)).ok().flatten()
         });
         let seconds = event.elapsed.as_secs_f64();
         let mut frame = self.frame();
         frame.damage.frame(health, seconds);
-        frame.exhaustion = exhaustion;
+        frame.synced = synced;
     }
 
     /// The armour row, the counters, the damage taken and the pitch, over the HUD.
@@ -618,12 +637,13 @@ mod tests {
     }
 
     #[test]
-    fn exhaustion_is_sent_when_it_moves() {
-        assert!(exhaustion_changed(None, 0.0));
-        assert!(!exhaustion_changed(Some(1.0), 1.005));
-        assert!(exhaustion_changed(Some(1.0), 1.02));
-        // Back to 0 when a hunger point goes: always sent.
-        assert!(exhaustion_changed(Some(0.005), 0.0));
+    fn food_is_sent_when_it_moves() {
+        assert!(food_changed(None, [0.0, 0.0]));
+        assert!(!food_changed(Some([5.0, 1.0]), [5.0, 1.005]));
+        assert!(food_changed(Some([5.0, 1.0]), [5.0, 1.02]));
+        assert!(food_changed(Some([5.0, 1.0]), [4.0, 1.0]));
+        // Back to 0 when a point goes: always sent.
+        assert!(food_changed(Some([5.0, 0.005]), [5.0, 0.0]));
     }
 
     #[test]
