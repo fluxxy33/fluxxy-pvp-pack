@@ -253,7 +253,12 @@ pub fn estimated_health(food: i32, saturation: f32, exhaustion: f32, values: Foo
     if !exhaustion.is_finite() || !saturation.is_finite() {
         return 0.0;
     }
-    while food >= 18 {
+    // Each pass either regenerates or uses up 4 exhaustion; a few hundred cover any food. The
+    // cap is a backstop: the gain checks below already stop a pass that changes nothing.
+    for _ in 0..1000 {
+        if food < 18 {
+            break;
+        }
         while exhaustion > EXHAUSTION_MAX {
             exhaustion -= EXHAUSTION_MAX;
             if saturation > 0.0 {
@@ -265,9 +270,18 @@ pub fn estimated_health(food: i32, saturation: f32, exhaustion: f32, values: Foo
         if food >= 20 && saturation > f32::MIN_POSITIVE {
             let limited = saturation.min(REGEN_EXHAUSTION);
             let until = next_up(EXHAUSTION_MAX) - exhaustion;
-            let steps = ((until / limited).ceil() as i32).max(1);
-            health += limited / REGEN_EXHAUSTION * steps as f32;
-            exhaustion += limited * steps as f32;
+            let steps = (until / limited).ceil().max(1.0);
+            // A tiny saturation (a data pack's food) would take more steps than an i32 holds, or
+            // add nothing to the exhaustion: AppleSkin's loop never ends there. Nothing to show.
+            if steps >= i32::MAX as f32 {
+                return 0.0;
+            }
+            let before = exhaustion;
+            health += limited / REGEN_EXHAUSTION * steps;
+            exhaustion += limited * steps;
+            if exhaustion <= before {
+                return 0.0;
+            }
         } else if food >= 18 {
             health += 1.0;
             exhaustion += REGEN_EXHAUSTION;
@@ -884,6 +898,19 @@ mod tests {
         assert_eq!(estimated_health(10, 0.0, 0.0, bread), 0.0);
         // 13 + 5 = 18: slow regen until food drops under 18.
         assert!(estimated_health(13, 0.0, 0.0, bread) >= 1.0);
+    }
+
+    #[test]
+    fn a_tiny_saturation_ends_the_estimate() {
+        // A data pack's food with next to no saturation: the estimate ends, and where fast
+        // regeneration would take endless steps it shows nothing.
+        for saturation in [1e-20, 1e-16] {
+            let food = FoodValues { nutrition: 20, saturation };
+            assert_eq!(estimated_health(0, 0.0, 0.0, food), 0.0);
+        }
+        // Under the smallest normal float it is no saturation at all: slow regeneration.
+        let food = FoodValues { nutrition: 20, saturation: 1e-39 };
+        assert!(estimated_health(0, 0.0, 0.0, food).is_finite());
     }
 
     #[test]

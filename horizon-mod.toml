@@ -1,6 +1,6 @@
 id = "fluxxy_pvp"
 name = "Fluxxy's PvP Pack"
-version = "1.0.0"
+version = "1.0.1"
 description = "PvP helpers in one mod: low fire, food info, armour HUD, item counters, damage indicator and elytra pitch."
 authors = ["fluxxy33"]
 license = "MIT"
@@ -10,5 +10,5 @@ side = "both"
 capabilities = ["registries"]
 
 [wasm]
-sha512 = "be6c9ba4606b20a6e5a238c461507397bd8125004d680c82730e029c1338a78df3de35caa0b454130684aebc116b9e74bfdcaff548ee7222e4135af1c1a944dc"
+sha512 = "2a46f8df3cb4f5d089d057b5b72a76080b7469e0754d8dc408ab49e3169a32ae0473d22b11a61be074a3e30402f7bba83470045fbf5bdc54cc5000b33745c4d1"
 toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"
